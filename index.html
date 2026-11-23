@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estação Meteorológica LEAG</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-200 flex justify-center min-h-screen font-sans text-slate-800">
+
+  <!-- Container Mobile -->
+  <div class="w-full max-w-md bg-[#F4F6F8] min-h-screen flex flex-col justify-between shadow-2xl relative overflow-hidden">
+
+    <!-- ================= CABEÇALHO ================= -->
+    <header class="bg-gradient-to-b from-[#134E6F] to-[#1B6B93] text-white pt-5 pb-6 px-4 rounded-b-2xl shadow-md">
+      
+      <!-- Seletor de Estação + Ações -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="relative flex items-center">
+          <select id="select-estacao" onchange="carregarDados()"
+            class="appearance-none bg-transparent text-white font-semibold text-base pr-6 focus:outline-none cursor-pointer">
+            <option value="1" class="text-slate-900">Estação LEAG - UENF</option>
+            <option value="2" class="text-slate-900">Estação Experimental Norte</option>
+          </select>
+          <svg class="w-4 h-4 text-white/80 -ml-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <span class="text-[10px] font-medium text-white/80 bg-white/10 px-2 py-0.5 rounded">
+            Preview
+          </span>
+          <button onclick="mudarAbaInferior('ia')" title="Boletim IA"
+            class="p-1.5 rounded-lg border border-orange-400/70 text-orange-300 hover:bg-white/10 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            </svg>
+          </button>
+          <button onclick="carregarDados()" title="Atualizar leituras"
+            class="p-1.5 rounded-lg text-white/80 hover:bg-white/10 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Abas de Variáveis (Evapotranspiração como principal) -->
+      <nav id="tabs-variaveis" class="flex gap-5 overflow-x-auto no-scrollbar border-b border-white/15 pb-1 text-sm font-medium">
+        <button data-var="evapotranspiracao" onclick="selecionarVariavel('evapotranspiracao')"
+          class="tab-var whitespace-nowrap pb-2 border-b-2 border-orange-400 text-white font-semibold transition">
+          Evapotransp.
+        </button>
+        <button data-var="temperatura_ar" onclick="selecionarVariavel('temperatura_ar')"
+          class="tab-var whitespace-nowrap pb-2 border-b-2 border-transparent text-white/70 hover:text-white transition">
+          Temperatura
+        </button>
+        <button data-var="umidade_ar" onclick="selecionarVariavel('umidade_ar')"
+          class="tab-var whitespace-nowrap pb-2 border-b-2 border-transparent text-white/70 hover:text-white transition">
+          Umidade
+        </button>
+        <button data-var="pressao_atm" onclick="selecionarVariavel('pressao_atm')"
+          class="tab-var whitespace-nowrap pb-2 border-b-2 border-transparent text-white/70 hover:text-white transition">
+          Pressão
+        </button>
+        <button data-var="radiacao_solar" onclick="selecionarVariavel('radiacao_solar')"
+          class="tab-var whitespace-nowrap pb-2 border-b-2 border-transparent text-white/70 hover:text-white transition">
+          Radiação
+        </button>
+        <button data-var="velocidade_vento" onclick="selecionarVariavel('velocidade_vento')"
+          class="tab-var whitespace-nowrap pb-2 border-b-2 border-transparent text-white/70 hover:text-white transition">
+          Vento
+        </button>
+      </nav>
+
+      <!-- Valor Atual em Destaque -->
+      <div class="text-center mt-5">
+        <div id="valor-atual" class="text-3xl font-bold tracking-tight">3,6 mm</div>
+        <div id="ultima-leitura" class="text-xs text-white/75 mt-1">Última leitura: 23/11/2026 às 18:54</div>
+      </div>
+    </header>
+
+    <!-- ================= CONTEÚDO PRINCIPAL ================= -->
+    <main class="flex-1 px-4 pt-4 pb-24 overflow-y-auto">
+
+      <!-- TELA 1: PAINEL DE GRÁFICOS -->
+      <section id="view-painel">
+        <!-- Seletor de Periodicidade (Com 1A e 2A incluídos) -->
+        <div id="pills-periodo" class="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar mb-4">
+          <button data-per="AGORA" onclick="selecionarPeriodo('AGORA')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#EA580C] text-white shadow-sm transition shrink-0">
+            Agora
+          </button>
+          <button data-per="24H" onclick="selecionarPeriodo('24H')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition shrink-0">
+            24H
+          </button>
+          <button data-per="7D" onclick="selecionarPeriodo('7D')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition shrink-0">
+            7D
+          </button>
+          <button data-per="30D" onclick="selecionarPeriodo('30D')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition shrink-0">
+            30D
+          </button>
+          <button data-per="6M" onclick="selecionarPeriodo('6M')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition shrink-0">
+            6M
+          </button>
+          <button data-per="1A" onclick="selecionarPeriodo('1A')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition shrink-0">
+            1A
+          </button>
+          <button data-per="2A" onclick="selecionarPeriodo('2A')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition shrink-0">
+            2A
+          </button>
+          <button data-per="TUDO" onclick="selecionarPeriodo('TUDO')"
+            class="pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition shrink-0">
+            Tudo
+          </button>
+        </div>
+
+        <!-- Legenda do Gráfico -->
+        <div class="flex items-center justify-between text-xs text-slate-600 mb-1 px-1">
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#DC2626] inline-block"></span>
+              <span id="legenda-variavel" class="font-medium">Evapotransp. (mm)</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 border-t-2 border-dashed border-slate-400 inline-block"></span>
+              <span>Média do período</span>
+            </div>
+          </div>
+          <span id="badge-escala" class="text-[11px] text-slate-400"></span>
+        </div>
+
+        <!-- Gráfico Interativo ECharts -->
+        <div id="grafico-principal" class="w-full h-56"></div>
+
+        <!-- 3 Cards de Resumo (Mínima, Média, Máxima) -->
+        <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 grid grid-cols-3 divide-x divide-slate-100 text-center mt-2">
+          <div class="px-1">
+            <div class="text-xs text-slate-500 mb-1">Mínima</div>
+            <div id="card-min" class="text-sm font-bold text-sky-600">2,0 mm</div>
+          </div>
+          <div class="px-1">
+            <div class="text-xs text-slate-500 mb-1">Média</div>
+            <div id="card-med" class="text-sm font-bold text-slate-800">3,2 mm</div>
+          </div>
+          <div class="px-1">
+            <div class="text-xs text-slate-500 mb-1">Máxima</div>
+            <div id="card-max" class="text-sm font-bold text-orange-600">4,4 mm</div>
+          </div>
+        </div>
+
+        <!-- Card de Chamada para o Boletim IA -->
+        <div onclick="mudarAbaInferior('ia')"
+          class="mt-4 bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:border-orange-300 transition">
+          <div>
+            <div class="text-xs font-bold uppercase tracking-wider text-orange-600">Boletim Meteorológico IA</div>
+            <p class="text-xs text-slate-600 mt-0.5">Toque para ler ou ouvir a previsão gerada pelo Ollama</p>
+          </div>
+          <div class="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- Cards Individuais dos Demais Parâmetros -->
+        <div class="mt-4">
+          <div class="flex items-center justify-between mb-2 px-1">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Demais Parâmetros</h3>
+            <span id="badge-tipo-demais" class="text-[11px] font-semibold text-[#134E6F] bg-sky-100 px-2 py-0.5 rounded-full">
+              Última medição
+            </span>
+          </div>
+          <div id="grid-demais-parametros" class="grid grid-cols-3 gap-2.5"></div>
+        </div>
+      </section>
+
+      <!-- TELA 2: BOLETIM DA IA + ÁUDIO -->
+      <section id="view-ia" class="hidden space-y-4">
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-[#134E6F] bg-sky-50 px-2.5 py-1 rounded-md">
+              Análise Ollama + Busca Vetorial MySQL 9
+            </span>
+          </div>
+
+          <h2 class="text-base font-bold text-slate-800 mb-2">Condição Atual e Tendência</h2>
+          
+          <p id="texto-boletim" class="text-sm text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+            Nas últimas horas, a Estação LEAG registrou evapotranspiração em torno de 3,6 mm, temperatura estável em 27,4 °C e umidade relativa em 72%. A busca vetorial identificou 3 dias históricos com comportamento atmosférico semelhante, indicando redução gradual da radiação solar e ventos leves no início da noite.
+          </p>
+
+          <div class="flex gap-2.5 mt-4">
+            <button id="btn-ouvir" onclick="alternarAudio()"
+              class="flex-1 bg-[#EA580C] hover:bg-orange-700 text-white font-semibold text-sm py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+              <span id="label-audio">Ouvir Boletim em Áudio</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TELA 3: INFORMAÇÕES DA ESTAÇÃO -->
+      <section id="view-estacoes" class="hidden space-y-3">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-slate-800">Estação Meteorológica LEAG - UENF</h3>
+            <span class="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Online</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Campos dos Goytacazes - RJ • Lat: -21.7644 | Lon: -41.3258</p>
+          <div class="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 flex justify-between">
+            <span>Protocolo: MQTT (Mosquitto)</span>
+            <span>Banco: MySQL 9 Vector</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ================= BARRA INFERIOR FIXA ================= -->
+    <nav class="bg-white border-t border-slate-200 px-6 py-2.5 flex justify-around items-center absolute bottom-0 w-full z-10">
+      <button onclick="mudarAbaInferior('painel')" id="nav-painel"
+        class="nav-item flex flex-col items-center text-[#EA580C] font-semibold text-xs gap-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+        </svg>
+        <span>Painel</span>
+      </button>
+
+      <button onclick="mudarAbaInferior('ia')" id="nav-ia"
+        class="nav-item flex flex-col items-center text-slate-400 hover:text-slate-600 text-xs gap-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+        <span>Boletim IA</span>
+      </button>
+
+      <button onclick="mudarAbaInferior('estacoes')" id="nav-estacoes"
+        class="nav-item flex flex-col items-center text-slate-400 hover:text-slate-600 text-xs gap-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span>Estações</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- ================= LÓGICA DO DASHBOARD ================= -->
+  <script>
+    const MODO_SIMULACAO = true;
+    const API_URL = "http://localhost:8000";
+
+    let variavelAtual = "evapotranspiracao";
+    let periodoAtual = "AGORA";
+    let chart = echarts.init(document.getElementById("grafico-principal"));
+
+    const CONFIG_VARIAVEIS = {
+      evapotranspiracao: { nome: "Evapotransp.", unidade: "mm",   base: 3.4,    variacao: 1.4,   ultima: 3.6 },
+      temperatura_ar:    { nome: "Temperatura",  unidade: "°C",   base: 26.2,   variacao: 4.8,   ultima: 27.4 },
+      umidade_ar:        { nome: "Umidade",      unidade: "%",    base: 73.5,   variacao: 14.0,  ultima: 72.1 },
+      pressao_atm:       { nome: "Pressão",      unidade: "hPa",  base: 1012.8, variacao: 4.2,   ultima: 1012.3 },
+      radiacao_solar:    { nome: "Radiação",     unidade: "W/m²", base: 510.0,  variacao: 280.0, ultima: 540.2 },
+      velocidade_vento:  { nome: "Vento",        unidade: "m/s",  base: 2.4,    variacao: 1.6,   ultima: 2.1 }
+    };
+
+    const LABELS_PERIODO = {
+      AGORA: "Agora",
+      "24H": "24 horas",
+      "7D":  "7 dias",
+      "30D": "30 dias",
+      "6M":  "6 meses",
+      "1A":  "1 ano",
+      "2A":  "2 anos",
+      TUDO:  "Todo período"
+    };
+
+    const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+    function formatarDataCompleta(dataObj) {
+      const dia = String(dataObj.getDate()).padStart(2, "0");
+      const mes = String(dataObj.getMonth() + 1).padStart(2, "0");
+      const ano = dataObj.getFullYear();
+      const hora = String(dataObj.getHours()).padStart(2, "0");
+      const min = String(dataObj.getMinutes()).padStart(2, "0");
+      return `${dia}/${mes}/${ano} às ${hora}:${min}`;
+    }
+
+    function gerarSerieVariavel(chaveVar, periodo) {
+      const cfg = CONFIG_VARIAVEIS[chaveVar];
+      const agora = new Date();
+      const labelsEixo = [];
+      const detalhesTooltip = [];
+      const valores = [];
+
+      const ehEscalaMensal = ["6M", "1A", "2A", "TUDO"].includes(periodo);
+
+      if (ehEscalaMensal) {
+        // Escala agregada por média mensal (6M = 6 meses, 1A = 12 meses, 2A = 24 meses, TUDO = 36 meses)
+        const totalMeses = periodo === "6M" ? 6 : periodo === "1A" ? 12 : periodo === "2A" ? 24 : 36;
+
+        for (let i = totalMeses - 1; i >= 0; i--) {
+          const dt = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+          const mesNome = MESES_CURTOS[dt.getMonth()];
+          const anoCurto = String(dt.getFullYear()).slice(-2);
+
+          // Rodapé do eixo X: apenas mês/ano (ex: Nov/26)
+          labelsEixo.push(`${mesNome}/${anoCurto}`);
+          // Tooltip ao passar o mouse/clicar: informa que é a média daquele mês
+          detalhesTooltip.push(`Média de ${mesNome}/${dt.getFullYear()}`);
+
+          const sazonalidade = Math.cos((dt.getMonth() / 12) * Math.PI * 2) * (cfg.variacao * 0.5);
+          const ruido = (Math.random() - 0.5) * (cfg.variacao * 0.25);
+          const val = Number((cfg.base + sazonalidade + ruido).toFixed(1));
+          valores.push(Math.max(0, val));
+        }
+      } else {
+        // Escala de medições individuais (AGORA, 24H, 7D, 30D)
+        const configCurta = {
+          AGORA: { pontos: 18, passoMs: 5 * 60 * 1000 },         // A cada 5 min
+          "24H": { pontos: 24, passoMs: 60 * 60 * 1000 },        // A cada 1 hora
+          "7D":  { pontos: 14, passoMs: 12 * 60 * 60 * 1000 },   // A cada 12 horas
+          "30D": { pontos: 30, passoMs: 24 * 60 * 60 * 1000 }    // A cada 1 dia
+        };
+
+        const { pontos, passoMs } = configCurta[periodo];
+
+        for (let i = pontos - 1; i >= 0; i--) {
+          const dt = new Date(agora.getTime() - i * passoMs);
+          const dia = String(dt.getDate()).padStart(2, "0");
+          const mes = String(dt.getMonth() + 1).padStart(2, "0");
+          const hora = String(dt.getHours()).padStart(2, "0");
+          const min = String(dt.getMinutes()).padStart(2, "0");
+
+          // Rodapé do eixo X conforme a periodicidade selecionada
+          if (periodo === "AGORA" || periodo === "24H") {
+            labelsEixo.push(`${hora}:${min}`); // Só a hora no rodapé
+          } else {
+            labelsEixo.push(`${dia}/${mes}`);   // Só dia e mês no rodapé (7D e 30D)
+          }
+
+          // Tooltip completo com data e horário exato da medição
+          detalhesTooltip.push(formatarDataCompleta(dt));
+
+          if (i === 0) {
+            valores.push(cfg.ultima);
+          } else {
+            const onda = Math.sin(i / 2.8) * (cfg.variacao * 0.55);
+            const ruido = (Math.random() - 0.5) * (cfg.variacao * 0.35);
+            const val = Number((cfg.base + onda + ruido).toFixed(1));
+            valores.push(Math.max(0, val));
+          }
+        }
+      }
+
+      const min = Number(Math.min(...valores).toFixed(1));
+      const max = Number(Math.max(...valores).toFixed(1));
+      const med = Number((valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1));
+
+      return {
+        atual: cfg.ultima,
+        ultimaData: formatarDataCompleta(agora),
+        unidade: cfg.unidade,
+        nome: cfg.nome,
+        ehEscalaMensal,
+        min,
+        med,
+        max,
+        labelsEixo,
+        detalhesTooltip,
+        valores
+      };
+    }
+
+    function renderizarDemaisParametros(resumosPorVariavel) {
+      const container = document.getElementById("grid-demais-parametros");
+      const badge = document.getElementById("badge-tipo-demais");
+      const ehAgora = periodoAtual === "AGORA";
+
+      badge.innerText = ehAgora
+        ? "Última medição"
+        : `Média (${LABELS_PERIODO[periodoAtual]})`;
+
+      container.innerHTML = "";
+
+      Object.keys(CONFIG_VARIAVEIS).forEach(chave => {
+        if (chave === variavelAtual) return;
+
+        const item = resumosPorVariavel[chave];
+        const valorExibido = ehAgora ? item.atual : item.med;
+
+        const card = document.createElement("button");
+        card.type = "button";
+        card.onclick = () => selecionarVariavel(chave);
+        card.className = "bg-white rounded-xl p-3 shadow-sm border border-slate-100 text-left hover:border-orange-300 transition flex flex-col justify-between";
+        card.innerHTML = `
+          <span class="text-[11px] font-medium text-slate-500 truncate w-full">${item.nome}</span>
+          <span class="text-sm font-bold text-slate-800 mt-1">
+            ${String(valorExibido).replace(".", ",")} <span class="text-xs font-normal text-slate-500">${item.unidade}</span>
+          </span>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function carregarDados() {
+      let dadosPrincipal;
+      const resumosTodasVariaveis = {};
+
+      if (MODO_SIMULACAO) {
+        Object.keys(CONFIG_VARIAVEIS).forEach(chave => {
+          resumosTodasVariaveis[chave] = gerarSerieVariavel(chave, periodoAtual);
+        });
+        dadosPrincipal = resumosTodasVariaveis[variavelAtual];
+      } else {
+        const estacaoId = document.getElementById("select-estacao").value;
+        const resp = await fetch(`${API_URL}/api/painel/${estacaoId}?variavel=${variavelAtual}&periodo=${periodoAtual}`);
+        const json = await resp.json();
+        dadosPrincipal = json.principal;
+        Object.assign(resumosTodasVariaveis, json.todas_variaveis);
+      }
+
+      document.getElementById("valor-atual").innerText = `${String(dadosPrincipal.atual).replace(".", ",")} ${dadosPrincipal.unidade}`;
+      document.getElementById("ultima-leitura").innerText = `Última leitura: ${dadosPrincipal.ultimaData}`;
+      document.getElementById("legenda-variavel").innerText = `${dadosPrincipal.nome} (${dadosPrincipal.unidade})`;
+      document.getElementById("badge-escala").innerText = dadosPrincipal.ehEscalaMensal ? "Médias mensais" : "";
+      document.getElementById("card-min").innerText = `${String(dadosPrincipal.min).replace(".", ",")} ${dadosPrincipal.unidade}`;
+      document.getElementById("card-med").innerText = `${String(dadosPrincipal.med).replace(".", ",")} ${dadosPrincipal.unidade}`;
+      document.getElementById("card-max").innerText = `${String(dadosPrincipal.max).replace(".", ",")} ${dadosPrincipal.unidade}`;
+
+      renderizarDemaisParametros(resumosTodasVariaveis);
+
+      chart.setOption({
+        grid: { left: 42, right: 14, top: 18, bottom: 26 },
+        tooltip: {
+          trigger: "axis",
+          formatter: function (params) {
+            const idx = params[0].dataIndex;
+            const infoTempo = dadosPrincipal.detalhesTooltip[idx];
+            const val = String(params[0].value).replace(".", ",");
+            return `<div style="font-size:11px;">
+                      <div style="color:#64748B;margin-bottom:2px;">${infoTempo}</div>
+                      <strong>${dadosPrincipal.nome}: ${val} ${dadosPrincipal.unidade}</strong>
+                    </div>`;
+          }
+        },
+        xAxis: {
+          type: "category",
+          data: dadosPrincipal.labelsEixo,
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: {
+            color: "#64748B",
+            fontSize: 10,
+            rotate: 0,
+            hideOverlap: true,
+            margin: 10
+          }
+        },
+        yAxis: {
+          type: "value",
+          scale: true,
+          splitLine: { lineStyle: { color: "#E2E8F0" } },
+          axisLabel: { color: "#64748B", fontSize: 10 }
+        },
+        series: [
+          {
+            name: dadosPrincipal.nome,
+            type: "line",
+            data: dadosPrincipal.valores,
+            smooth: 0.25,
+            showSymbol: false,
+            symbol: "circle",
+            symbolSize: 6,
+            itemStyle: { color: "#DC2626" },
+            lineStyle: { color: "#DC2626", width: 2.2 },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: "rgba(220, 38, 38, 0.16)" },
+                { offset: 1, color: "rgba(220, 38, 38, 0.0)" }
+              ])
+            },
+            markLine: {
+              symbol: "none",
+              silent: true,
+              lineStyle: { type: "dashed", color: "#94A3B8", width: 1.5 },
+              label: { show: false },
+              data: [{ yAxis: Number(dadosPrincipal.med) }]
+            }
+          }
+        ]
+      });
+    }
+
+    function selecionarVariavel(novaVar) {
+      variavelAtual = novaVar;
+      document.querySelectorAll(".tab-var").forEach(btn => {
+        const ativo = btn.dataset.var === novaVar;
+        btn.className = `tab-var whitespace-nowrap pb-2 border-b-2 transition ${
+          ativo ? "border-orange-400 text-white font-semibold" : "border-transparent text-white/70 hover:text-white"
+        }`;
+      });
+      carregarDados();
+    }
+
+    function selecionarPeriodo(novoPer) {
+      periodoAtual = novoPer;
+      document.querySelectorAll(".pill-per").forEach(btn => {
+        const ativo = btn.dataset.per === novoPer;
+        btn.className = `pill-per px-2.5 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
+          ativo ? "bg-[#EA580C] text-white shadow-sm" : "text-slate-600 hover:bg-slate-200"
+        }`;
+      });
+      carregarDados();
+    }
+
+    function mudarAbaInferior(aba) {
+      ["painel", "ia", "estacoes"].forEach(id => {
+        document.getElementById(`view-${id}`).classList.toggle("hidden", id !== aba);
+        const navBtn = document.getElementById(`nav-${id}`);
+        navBtn.classList.toggle("text-[#EA580C]", id === aba);
+        navBtn.classList.toggle("font-semibold", id === aba);
+        navBtn.classList.toggle("text-slate-400", id !== aba);
+      });
+      if (aba === "painel") chart.resize();
+    }
+
+    function alternarAudio() {
+      const texto = document.getElementById("texto-boletim").innerText;
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        document.getElementById("label-audio").innerText = "Ouvir Boletim em Áudio";
+        return;
+      }
+      const fala = new SpeechSynthesisUtterance(texto);
+      fala.lang = "pt-BR";
+      fala.onend = () => {
+        document.getElementById("label-audio").innerText = "Ouvir Boletim em Áudio";
+      };
+      document.getElementById("label-audio").innerText = "Parar Áudio";
+      window.speechSynthesis.speak(fala);
+    }
+
+    window.addEventListener("resize", () => chart.resize());
+    carregarDados();
+  </script>
+</body>
+</html>
